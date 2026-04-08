@@ -1,0 +1,339 @@
+"""Moteur principal de génération de documentation."""
+
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
+
+from documenta.analyzer.project import ProjectInfo
+from documenta.config import DocumentaConfig
+from documenta.drawio.builder import DrawioBuilder, parse_llm_json
+from documenta.drawio.exporter import DrawioExporter
+from documenta.llm.client import OllamaClient
+from documenta.llm.prompts import PromptBuilder
+from documenta.utils.files import safe_write
+
+console = Console()
+
+
+class DocumentationEngine:
+    """Orchestre la génération complète de la documentation."""
+
+    def __init__(
+        self,
+        project: ProjectInfo,
+        config: DocumentaConfig | None = None,
+    ):
+        self.project = project
+        self.config = config or DocumentaConfig()
+        self.llm = OllamaClient(self.config)
+        self.prompts = PromptBuilder(project)
+        self.drawio = DrawioBuilder()
+        self.exporter = DrawioExporter()
+        self.output_dir = self.config.get_output_path(project.root_path)
+
+    async def generate_all(self) -> dict[str, Path]:
+        """Génère toute la documentation.
+
+        Returns:
+            Dictionnaire des fichiers générés {nom: chemin}.
+        """
+        generated: dict[str, Path] = {}
+
+        console.print(Panel(
+            f"[bold cyan]Documenta[/bold cyan] - Génération de documentation\n"
+            f"Projet : [bold]{self.project.name}[/bold]\n"
+            f"Sortie  : {self.output_dir}",
+            title="📚 Documenta",
+            border_style="cyan",
+        ))
+
+        # Vérifier la connexion Ollama
+        if not await self.llm.check_connection():
+            console.print(
+                "[red]✗ Impossible de se connecter à Ollama.[/red]\n"
+                "  Lancez Ollama : ollama serve\n"
+                "  Ou installez-le : https://ollama.com"
+            )
+            return generated
+
+        # Vérifier les modèles disponibles
+        await self._check_models()
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            # Génération parallèle des contenus via LLM
+            # Phase 1 : Architecture + Fonctionnel (utilisent le modèle diagramme)
+            task1 = progress.add_task("Génération de l'architecture...", total=None)
+            task2 = progress.add_task("Génération du schéma fonctionnel...", total=None)
+
+            arch_result, func_result = await asyncio.gather(
+                self._generate_architecture(),
+                self._generate_functional(),
+            )
+
+            if arch_result:
+                generated["architecture.drawio"] = arch_result
+                progress.update(task1, description="[green]✓ Architecture générée[/green]")
+            else:
+                progress.update(task1, description="[yellow]⚠ Architecture : échec[/yellow]")
+
+            if func_result:
+                generated["functional.drawio"] = func_result
+                progress.update(task2, description="[green]✓ Schéma fonctionnel généré[/green]")
+            else:
+                progress.update(task2, description="[yellow]⚠ Schéma fonctionnel : échec[/yellow]")
+
+            # Phase 2 : Documentation texte (parallèle)
+            task3 = progress.add_task("Génération de la doc de développement...", total=None)
+            task4 = progress.add_task("Génération des TODOs...", total=None)
+            task5 = progress.add_task("Génération du SETUP.md...", total=None)
+
+            dev_result, todo_result, setup_result = await asyncio.gather(
+                self._generate_development_docs(),
+                self._generate_todo(),
+                self._generate_setup(),
+            )
+
+            if dev_result:
+                generated["DEVELOPMENT.md"] = dev_result
+                progress.update(task3, description="[green]✓ Documentation développement[/green]")
+            else:
+                progress.update(task3, description="[yellow]⚠ Doc développement : échec[/yellow]")
+
+            if todo_result:
+                generated["TODO.md"] = todo_result
+                progress.update(task4, description="[green]✓ TODOs générés[/green]")
+            else:
+                progress.update(task4, description="[yellow]⚠ TODOs : échec[/yellow]")
+
+            if setup_result:
+                generated["SETUP.md"] = setup_result
+                progress.update(task5, description="[green]✓ SETUP.md généré[/green]")
+            else:
+                progress.update(task5, description="[yellow]⚠ SETUP.md : échec[/yellow]")
+
+            # Phase 3 : README (a besoin de connaître les fichiers générés)
+            task6 = progress.add_task("Génération du README.md...", total=None)
+            readme_result = await self._generate_readme()
+            if readme_result:
+                generated["README.md"] = readme_result
+                progress.update(task6, description="[green]✓ README.md généré[/green]")
+            else:
+                progress.update(task6, description="[yellow]⚠ README.md : échec[/yellow]")
+
+            # Phase 4 : Export PNG
+            if self.config.export_png:
+                task7 = progress.add_task("Export PNG des diagrammes...", total=None)
+                png_files = self.exporter.export_all(self.output_dir)
+                for png in png_files:
+                    generated[png.name] = png
+                if png_files:
+                    progress.update(task7, description=f"[green]✓ {len(png_files)} PNG exportés[/green]")
+                else:
+                    progress.update(task7, description="[yellow]⚠ Export PNG : draw.io non disponible[/yellow]")
+
+        # Résumé
+        console.print()
+        console.print(Panel(
+            "\n".join(f"  ✓ {name}" for name in sorted(generated.keys())),
+            title=f"📁 {len(generated)} fichiers générés dans {self.output_dir}",
+            border_style="green",
+        ))
+
+        return generated
+
+    async def _check_models(self) -> None:
+        """Vérifie que les modèles requis sont disponibles."""
+        models_needed = {
+            self.config.code_model: "analyse de code",
+            self.config.doc_model: "documentation",
+            self.config.diagram_model: "diagrammes",
+        }
+
+        available = await self.llm.list_models()
+        available_base = {m.split(":")[0] for m in available}
+
+        for model, usage in models_needed.items():
+            model_base = model.split(":")[0]
+            if model_base not in available_base and model not in available:
+                console.print(
+                    f"[yellow]⚠ Modèle '{model}' ({usage}) non trouvé localement.[/yellow]"
+                )
+                console.print(f"  → Téléchargement automatique via : ollama pull {model}")
+                await self.llm.pull_model(model)
+
+    async def _generate_architecture(self) -> Path | None:
+        """Génère le diagramme d'architecture."""
+        prompt = self.prompts.architecture_prompt()
+        system = (
+            "Tu es un architecte logiciel expert. Tu analyses du code source et tu produis "
+            "des descriptions d'architecture en JSON structuré. Sois précis et factuel."
+        )
+
+        response = await self.llm.generate_for_diagram(prompt, system_prompt=system)
+        if not response:
+            return None
+
+        arch_data = parse_llm_json(response)
+        if not arch_data or "layers" not in arch_data:
+            console.print("[yellow]⚠ Réponse architecture invalide, utilisation d'un fallback[/yellow]")
+            arch_data = self._fallback_architecture()
+
+        xml = self.drawio.build_architecture_diagram(arch_data)
+        output_path = self.output_dir / "architecture.drawio"
+        safe_write(output_path, xml)
+        return output_path
+
+    async def _generate_functional(self) -> Path | None:
+        """Génère le diagramme fonctionnel."""
+        prompt = self.prompts.functional_prompt()
+        system = (
+            "Tu es un analyste fonctionnel expert. Tu analyses du code source et tu identifies "
+            "les fonctionnalités métier et les flux utilisateur. Réponds en JSON structuré."
+        )
+
+        response = await self.llm.generate_for_diagram(prompt, system_prompt=system)
+        if not response:
+            return None
+
+        func_data = parse_llm_json(response)
+        if not func_data or "actors" not in func_data:
+            console.print("[yellow]⚠ Réponse fonctionnelle invalide, utilisation d'un fallback[/yellow]")
+            func_data = self._fallback_functional()
+
+        xml = self.drawio.build_functional_diagram(func_data)
+        output_path = self.output_dir / "functional.drawio"
+        safe_write(output_path, xml)
+        return output_path
+
+    async def _generate_development_docs(self) -> Path | None:
+        """Génère la documentation de développement."""
+        prompt = self.prompts.development_docs_prompt()
+        system = (
+            "Tu es un rédacteur technique senior. Tu rédiges de la documentation "
+            "de développement claire, structurée et détaillée en français. "
+            "Utilise le format Markdown."
+        )
+
+        response = await self.llm.generate_for_docs(prompt, system_prompt=system)
+        if not response:
+            return None
+
+        output_path = self.output_dir / "DEVELOPMENT.md"
+        safe_write(output_path, response)
+        return output_path
+
+    async def _generate_todo(self) -> Path | None:
+        """Génère la liste des points restants."""
+        prompt = self.prompts.todo_prompt()
+        system = (
+            "Tu es un développeur senior qui fait une revue de code approfondie. "
+            "Tu identifies les TODOs, les améliorations nécessaires et la dette technique. "
+            "Sois précis et actionnable."
+        )
+
+        response = await self.llm.generate_for_code(prompt, system_prompt=system)
+        if not response:
+            return None
+
+        output_path = self.output_dir / "TODO.md"
+        safe_write(output_path, response)
+        return output_path
+
+    async def _generate_setup(self) -> Path | None:
+        """Génère le guide d'installation."""
+        prompt = self.prompts.setup_prompt()
+        system = (
+            "Tu es un DevOps expert. Tu rédiges des guides d'installation "
+            "clairs et complets. Chaque étape doit être vérifiable."
+        )
+
+        response = await self.llm.generate_for_docs(prompt, system_prompt=system)
+        if not response:
+            return None
+
+        output_path = self.output_dir / "SETUP.md"
+        safe_write(output_path, response)
+        return output_path
+
+    async def _generate_readme(self) -> Path | None:
+        """Génère le README.md principal (à la racine du projet)."""
+        prompt = self.prompts.readme_prompt()
+        system = (
+            "Tu es un développeur open-source expérimenté. Tu rédiges des README "
+            "professionnels, clairs et engageants en français."
+        )
+
+        response = await self.llm.generate_for_docs(prompt, system_prompt=system)
+        if not response:
+            return None
+
+        # Le README va à la racine du projet
+        output_path = self.project.root_path / "README.md"
+        safe_write(output_path, response)
+        return output_path
+
+    def _fallback_architecture(self) -> dict:
+        """Architecture fallback basée sur l'analyse statique."""
+        p = self.project
+        layers = []
+
+        # Détecter les couches à partir des langages et frameworks
+        if any(fw in str(p.tech_stack.frameworks) for fw in ["React", "Vue", "Angular", "Svelte", "Next"]):
+            layers.append({
+                "name": "Frontend",
+                "components": [{"name": fw, "description": "Interface utilisateur", "technology": fw, "files": []}
+                               for fw in p.tech_stack.frameworks if fw in ["React", "Vue.js", "Angular", "Svelte", "Next.js"]],
+            })
+
+        backend_fws = [fw for fw in p.tech_stack.frameworks
+                       if fw in ["FastAPI", "Django", "Flask", "Express.js", "NestJS", "Spring Boot"]]
+        if backend_fws:
+            layers.append({
+                "name": "Backend / API",
+                "components": [{"name": fw, "description": "Serveur applicatif", "technology": fw, "files": []}
+                               for fw in backend_fws],
+            })
+
+        if p.tech_stack.databases:
+            layers.append({
+                "name": "Base de données",
+                "components": [{"name": db, "description": "Stockage", "technology": db, "files": []}
+                               for db in p.tech_stack.databases],
+            })
+
+        if not layers:
+            layers.append({
+                "name": "Application",
+                "components": [
+                    {"name": p.name, "description": "Application principale",
+                     "technology": ", ".join(p.tech_stack.languages[:3]), "files": []}
+                ],
+            })
+
+        return {
+            "title": f"Architecture de {p.name}",
+            "layers": layers,
+            "connections": [],
+            "external_services": [],
+        }
+
+    def _fallback_functional(self) -> dict:
+        """Schéma fonctionnel fallback."""
+        return {
+            "title": f"Schéma fonctionnel de {self.project.name}",
+            "actors": [{"name": "Utilisateur", "description": "Utilisateur de l'application"}],
+            "features": [
+                {"name": self.project.name, "description": "Fonctionnalité principale",
+                 "actor": "Utilisateur", "steps": ["Lancer l'application", "Utiliser les fonctionnalités"]},
+            ],
+            "flows": [],
+        }

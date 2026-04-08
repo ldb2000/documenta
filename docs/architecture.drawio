@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="documenta" modified="2024-01-01T00:00:00.000Z" type="device">
+  <diagram id="architecture" name="Architecture de Documenta">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1"
+                  tooltips="1" connect="1" arrows="1" fold="1" page="1"
+                  pageScale="1" pageWidth="1200" pageHeight="900"
+                  math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Titre -->
+        <mxCell id="2" value="&lt;b&gt;Architecture de Documenta&lt;/b&gt;" style="text;html=1;fontSize=18;fontStyle=1;fillColor=none;strokeColor=none;fontColor=#1e3a5f;" vertex="1" parent="1">
+          <mxGeometry x="350" y="10" width="400" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Couche CLI -->
+        <mxCell id="10" value="CLI Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e3a5f;fontColor=#ffffff;strokeColor=none;fontSize=13;fontStyle=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="820" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="&lt;b&gt;CLI&lt;/b&gt;&lt;br&gt;&lt;i&gt;Typer + Rich&lt;/i&gt;&lt;br&gt;documenta/cli.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;fontColor=#333333;strokeColor=#1e3a5f;fontSize=11;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="200" y="100" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="&lt;b&gt;Config&lt;/b&gt;&lt;br&gt;&lt;i&gt;Pydantic Settings&lt;/i&gt;&lt;br&gt;documenta/config.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;fontColor=#333333;strokeColor=#1e3a5f;fontSize=11;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="540" y="100" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Couche Core -->
+        <mxCell id="20" value="Core Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0d652d;fontColor=#ffffff;strokeColor=none;fontSize=13;fontStyle=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="195" width="820" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="21" value="&lt;b&gt;Project Analyzer&lt;/b&gt;&lt;br&gt;&lt;i&gt;Scan, Detect, Git&lt;/i&gt;&lt;br&gt;analyzer/project.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f4ea;fontColor=#333333;strokeColor=#0d652d;fontSize=11;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="240" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="22" value="&lt;b&gt;Documentation Engine&lt;/b&gt;&lt;br&gt;&lt;i&gt;Orchestration async&lt;/i&gt;&lt;br&gt;generators/engine.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f4ea;fontColor=#333333;strokeColor=#0d652d;fontSize=11;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="280" y="240" width="170" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="23" value="&lt;b&gt;Prompt Builder&lt;/b&gt;&lt;br&gt;&lt;i&gt;Templates contextuels&lt;/i&gt;&lt;br&gt;llm/prompts.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f4ea;fontColor=#333333;strokeColor=#0d652d;fontSize=11;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="510" y="240" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="24" value="&lt;b&gt;DrawIO Builder&lt;/b&gt;&lt;br&gt;&lt;i&gt;XML mxGraph&lt;/i&gt;&lt;br&gt;drawio/builder.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f4ea;fontColor=#333333;strokeColor=#0d652d;fontSize=11;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="720" y="240" width="140" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Couche Infrastructure -->
+        <mxCell id="30" value="Infrastructure Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7b1fa2;fontColor=#ffffff;strokeColor=none;fontSize=13;fontStyle=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="340" width="820" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="31" value="&lt;b&gt;Ollama Client&lt;/b&gt;&lt;br&gt;&lt;i&gt;httpx async&lt;/i&gt;&lt;br&gt;llm/client.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;fontColor=#333333;strokeColor=#7b1fa2;fontSize=11;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="160" y="385" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="32" value="&lt;b&gt;DrawIO Exporter&lt;/b&gt;&lt;br&gt;&lt;i&gt;PNG via CLI&lt;/i&gt;&lt;br&gt;drawio/exporter.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;fontColor=#333333;strokeColor=#7b1fa2;fontSize=11;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="420" y="385" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="33" value="&lt;b&gt;File Utils&lt;/b&gt;&lt;br&gt;&lt;i&gt;I/O helpers&lt;/i&gt;&lt;br&gt;utils/files.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;fontColor=#333333;strokeColor=#7b1fa2;fontSize=11;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="660" y="385" width="140" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Services externes -->
+        <mxCell id="40" value="External Services" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e65100;fontColor=#ffffff;strokeColor=none;fontSize=13;fontStyle=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="490" width="820" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="41" value="&lt;b&gt;Ollama Server&lt;/b&gt;&lt;br&gt;&lt;i&gt;LLM Runtime&lt;/i&gt;&lt;br&gt;localhost:11434" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#fff3e0;fontColor=#333333;strokeColor=#e65100;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="535" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="42" value="&lt;b&gt;LLM Models&lt;/b&gt;&lt;br&gt;&lt;i&gt;DeepSeek Coder&lt;/i&gt;&lt;br&gt;&lt;i&gt;Mistral 7B&lt;/i&gt;&lt;br&gt;&lt;i&gt;Llama 3.1 8B&lt;/i&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#01579b;fontColor=#ffffff;strokeColor=#014477;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="340" y="535" width="150" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="43" value="&lt;b&gt;draw.io CLI&lt;/b&gt;&lt;br&gt;&lt;i&gt;PNG Export&lt;/i&gt;" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#fff3e0;fontColor=#333333;strokeColor=#e65100;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="570" y="535" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="44" value="&lt;b&gt;Projet cible&lt;/b&gt;&lt;br&gt;&lt;i&gt;Système de fichiers&lt;/i&gt;" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#fff3e0;fontColor=#333333;strokeColor=#e65100;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="770" y="535" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Connexions -->
+        <mxCell id="50" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;" edge="1" parent="1" source="11" target="22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="51" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;" edge="1" parent="1" source="12" target="22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="52" value="analyse" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0d652d;fontSize=10;fontColor=#0d652d;" edge="1" parent="1" source="22" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="53" value="prompts" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0d652d;fontSize=10;fontColor=#0d652d;" edge="1" parent="1" source="22" target="23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="54" value="drawio" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0d652d;fontSize=10;fontColor=#0d652d;" edge="1" parent="1" source="22" target="24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="55" value="HTTP async" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#7b1fa2;fontSize=10;fontColor=#7b1fa2;" edge="1" parent="1" source="22" target="31">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="56" value="subprocess" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#7b1fa2;fontSize=10;fontColor=#7b1fa2;" edge="1" parent="1" source="22" target="32">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="57" value="API REST" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;fontSize=10;fontColor=#e65100;dashed=1;" edge="1" parent="1" source="31" target="41">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="58" value="load" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;fontSize=10;fontColor=#e65100;dashed=1;" edge="1" parent="1" source="41" target="42">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="59" value="export" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;fontSize=10;fontColor=#e65100;dashed=1;" edge="1" parent="1" source="32" target="43">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="60" value="scan" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#e65100;fontSize=10;fontColor=#e65100;dashed=1;" edge="1" parent="1" source="21" target="44">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
