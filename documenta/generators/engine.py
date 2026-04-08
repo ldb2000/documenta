@@ -9,10 +9,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from documenta.analyzer.imports import ImportAnalyzer
 from documenta.analyzer.project import ProjectInfo
 from documenta.config import DocumentaConfig
 from documenta.drawio.builder import DrawioBuilder, parse_llm_json
 from documenta.drawio.exporter import DrawioExporter
+from documenta.drawio.mermaid_parser import parse_mermaid
 from documenta.llm.client import OllamaClient
 from documenta.llm.prompts import PromptBuilder
 from documenta.utils.files import safe_write
@@ -171,48 +173,116 @@ class DocumentationEngine:
                 await self.llm.pull_model(model)
 
     async def _generate_architecture(self) -> Path | None:
-        """Génère le diagramme d'architecture."""
+        """Génère le diagramme d'architecture via Mermaid + analyse statique."""
         prompt = self.prompts.architecture_prompt()
         system = (
-            "Tu es un architecte logiciel expert. Tu analyses du code source et tu produis "
-            "des descriptions d'architecture en JSON structuré. Sois précis et factuel."
+            "Tu es un architecte logiciel expert. Tu génères des diagrammes Mermaid "
+            "précis et complets. Chaque composant DOIT avoir au moins une connexion (flèche). "
+            "Sois exhaustif sur les relations entre composants."
         )
 
         response = await self.llm.generate_for_diagram(prompt, system_prompt=system)
-        if not response:
-            return None
 
-        arch_data = parse_llm_json(response)
-        if not arch_data or "layers" not in arch_data:
-            console.print("[yellow]⚠ Réponse architecture invalide, utilisation d'un fallback[/yellow]")
-            arch_data = self._fallback_architecture()
+        if response:
+            diagram = parse_mermaid(response)
 
+            # Enrichir avec les connexions détectées par l'analyse statique
+            diagram = self._enrich_with_static_analysis(diagram)
+
+            if diagram.nodes:
+                # Sauvegarder le source Mermaid
+                mermaid_path = self.output_dir / "architecture.mermaid.md"
+                safe_write(mermaid_path, f"```mermaid\n{response.strip()}\n```")
+
+                # Convertir en DrawIO
+                xml = self.drawio.build_from_mermaid(diagram, title=f"Architecture de {self.project.name}")
+                output_path = self.output_dir / "architecture.drawio"
+                safe_write(output_path, xml)
+                return output_path
+
+        # Fallback : JSON classique si Mermaid échoue
+        console.print("[yellow]⚠ Mermaid invalide, fallback sur le mode JSON[/yellow]")
+        arch_data = self._fallback_architecture()
         xml = self.drawio.build_architecture_diagram(arch_data)
         output_path = self.output_dir / "architecture.drawio"
         safe_write(output_path, xml)
         return output_path
 
     async def _generate_functional(self) -> Path | None:
-        """Génère le diagramme fonctionnel."""
+        """Génère le diagramme fonctionnel via Mermaid."""
         prompt = self.prompts.functional_prompt()
         system = (
-            "Tu es un analyste fonctionnel expert. Tu analyses du code source et tu identifies "
-            "les fonctionnalités métier et les flux utilisateur. Réponds en JSON structuré."
+            "Tu es un analyste fonctionnel expert. Tu génères des diagrammes Mermaid "
+            "décrivant les flux utilisateur et les fonctionnalités métier. "
+            "Chaque acteur et fonctionnalité DOIT avoir des flèches de connexion."
         )
 
         response = await self.llm.generate_for_diagram(prompt, system_prompt=system)
-        if not response:
-            return None
 
-        func_data = parse_llm_json(response)
-        if not func_data or "actors" not in func_data:
-            console.print("[yellow]⚠ Réponse fonctionnelle invalide, utilisation d'un fallback[/yellow]")
-            func_data = self._fallback_functional()
+        if response:
+            diagram = parse_mermaid(response)
 
+            if diagram.nodes:
+                # Sauvegarder le source Mermaid
+                mermaid_path = self.output_dir / "functional.mermaid.md"
+                safe_write(mermaid_path, f"```mermaid\n{response.strip()}\n```")
+
+                # Convertir en DrawIO
+                xml = self.drawio.build_from_mermaid(diagram, title=f"Schéma fonctionnel de {self.project.name}")
+                output_path = self.output_dir / "functional.drawio"
+                safe_write(output_path, xml)
+                return output_path
+
+        # Fallback
+        console.print("[yellow]⚠ Mermaid invalide, fallback sur le mode JSON[/yellow]")
+        func_data = self._fallback_functional()
         xml = self.drawio.build_functional_diagram(func_data)
         output_path = self.output_dir / "functional.drawio"
         safe_write(output_path, xml)
         return output_path
+
+    def _enrich_with_static_analysis(self, diagram):
+        """Enrichit un diagramme Mermaid avec les dépendances détectées statiquement."""
+        from documenta.drawio.mermaid_parser import MermaidEdge, MermaidNode
+
+        try:
+            analyzer = ImportAnalyzer(self.project.root_path, self.project.files)
+            dep_graph = analyzer.analyze()
+
+            # Ajouter les connexions détectées dans les imports
+            existing_edges = {(e.source, e.target) for e in diagram.edges}
+            module_groups = dep_graph.get_module_groups()
+
+            for dep in dep_graph.dependencies:
+                # Simplifier les noms pour matcher les noeuds du diagramme
+                src_short = dep.source.split("/")[0]
+                tgt_short = dep.target.split("/")[0]
+
+                # Chercher des noeuds correspondants dans le diagramme
+                src_node = self._find_matching_node(diagram, src_short)
+                tgt_node = self._find_matching_node(diagram, tgt_short)
+
+                if src_node and tgt_node and src_node != tgt_node:
+                    if (src_node, tgt_node) not in existing_edges:
+                        existing_edges.add((src_node, tgt_node))
+                        diagram.edges.append(MermaidEdge(
+                            source=src_node,
+                            target=tgt_node,
+                            label=dep.import_name,
+                            style="dotted",
+                        ))
+        except Exception:
+            pass  # Ne pas échouer si l'analyse statique a un problème
+
+        return diagram
+
+    def _find_matching_node(self, diagram, name: str) -> str | None:
+        """Trouve un noeud du diagramme dont le label ou l'ID correspond."""
+        name_lower = name.lower()
+        for node_id, node in diagram.nodes.items():
+            if name_lower in node_id.lower() or name_lower in node.label.lower():
+                return node_id
+        return None
 
     async def _generate_development_docs(self) -> Path | None:
         """Génère la documentation de développement."""

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class MxCell:
-    """Cellule mxGraph (nœud ou connexion)."""
+    """Cellule mxGraph (noeud ou connexion)."""
 
     id: str
     value: str = ""
@@ -33,7 +33,7 @@ class MxCell:
                 f'      <mxCell id="{self.id}" value="{escaped_value}" '
                 f'style="{escaped_style}" edge="1" parent="{self.parent}" '
                 f'source="{self.source}" target="{self.target}">\n'
-                f"        <mxGeometry relative=\"1\" as=\"geometry\" />\n"
+                f'        <mxGeometry relative="1" as="geometry" />\n'
                 f"      </mxCell>"
             )
         return (
@@ -75,13 +75,65 @@ STYLES = {
         "edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;"
         "jettySize=auto;html=1;strokeColor=#666666;fontSize=10;"
         "fontColor=#333333;exitX=0.5;exitY=1;exitDx=0;exitDy=0;"
+        "endArrow=blockThin;endFill=1;startSize=5;endSize=5;"
     ),
     "connection_right": (
         "edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;"
         "jettySize=auto;html=1;strokeColor=#666666;fontSize=10;"
         "fontColor=#333333;"
+        "endArrow=blockThin;endFill=1;startSize=5;endSize=5;"
+    ),
+    "connection_dotted": (
+        "edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;"
+        "jettySize=auto;html=1;strokeColor=#999999;fontSize=10;"
+        "fontColor=#666666;dashed=1;dashPattern=8 4;"
+        "endArrow=blockThin;endFill=1;startSize=5;endSize=5;"
+    ),
+    "connection_thick": (
+        "edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;"
+        "jettySize=auto;html=1;strokeColor=#333333;strokeWidth=2;fontSize=10;"
+        "fontColor=#333333;"
+        "endArrow=blockThin;endFill=1;startSize=6;endSize=8;"
     ),
 }
+
+# Styles par forme Mermaid → DrawIO
+MERMAID_SHAPE_STYLES = {
+    "rect": (
+        "rounded=1;whiteSpace=wrap;html=1;fillColor={bg};fontColor=#333333;"
+        "strokeColor={border};fontSize=12;arcSize=6;"
+    ),
+    "round": (
+        "rounded=1;whiteSpace=wrap;html=1;fillColor={bg};fontColor=#333333;"
+        "strokeColor={border};fontSize=12;arcSize=30;"
+    ),
+    "diamond": (
+        "rhombus;whiteSpace=wrap;html=1;fillColor={bg};fontColor=#333333;"
+        "strokeColor={border};fontSize=11;"
+    ),
+    "cylinder": (
+        "shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;"
+        "size=15;fillColor={bg};fontColor=#ffffff;strokeColor={border};fontSize=12;"
+    ),
+    "stadium": (
+        "rounded=1;whiteSpace=wrap;html=1;fillColor={bg};fontColor=#333333;"
+        "strokeColor={border};fontSize=12;arcSize=50;"
+    ),
+    "circle": (
+        "ellipse;whiteSpace=wrap;html=1;fillColor={bg};fontColor=#333333;"
+        "strokeColor={border};fontSize=12;aspect=fixed;"
+    ),
+}
+
+# Palette de couleurs pour les groupes/subgraphs Mermaid
+MERMAID_GROUP_COLORS = [
+    {"bg": "#dae8fc", "border": "#6c8ebf", "header": "#6c8ebf"},  # Bleu
+    {"bg": "#d5e8d4", "border": "#82b366", "header": "#82b366"},  # Vert
+    {"bg": "#e1d5e7", "border": "#9673a6", "header": "#9673a6"},  # Violet
+    {"bg": "#fff2cc", "border": "#d6b656", "header": "#d6b656"},  # Jaune
+    {"bg": "#f8cecc", "border": "#b85450", "header": "#b85450"},  # Rouge
+    {"bg": "#dae8fc", "border": "#3a7ecf", "header": "#3a7ecf"},  # Bleu foncé
+]
 
 # Palette de couleurs par couche
 LAYER_COLORS = [
@@ -349,6 +401,227 @@ class DrawioBuilder:
             flow_y += 110
 
         return self._to_xml(func_json.get("title", "Schéma fonctionnel"))
+
+    def build_from_mermaid(self, diagram, title: str = "Diagram") -> str:
+        """Construit un DrawIO à partir d'un MermaidDiagram parsé.
+
+        Args:
+            diagram: Instance de MermaidDiagram (de mermaid_parser.py)
+            title: Titre du diagramme
+
+        Returns:
+            XML DrawIO complet
+        """
+        from documenta.drawio.mermaid_parser import MermaidDiagram
+
+        self._cells = []
+        self._id_counter = 2
+        self._id_map = {}
+
+        is_horizontal = diagram.direction in ("LR", "RL")
+
+        # Calculer le layout
+        positions = self._layout_mermaid(diagram, is_horizontal)
+
+        # Créer les groupes (subgraphs) en premier (fond)
+        group_rects = self._compute_group_rects(diagram, positions)
+        for sg_idx, sg in enumerate(diagram.subgraphs):
+            if sg.id not in group_rects:
+                continue
+            gx, gy, gw, gh = group_rects[sg.id]
+            colors = MERMAID_GROUP_COLORS[sg_idx % len(MERMAID_GROUP_COLORS)]
+
+            # Fond du groupe
+            group_bg_id = self._next_id()
+            self._cells.append(MxCell(
+                id=group_bg_id,
+                value="",
+                style=(
+                    f"rounded=1;whiteSpace=wrap;html=1;fillColor={colors['bg']};"
+                    f"strokeColor={colors['border']};strokeWidth=1;opacity=40;"
+                    f"dashed=1;dashPattern=5 5;"
+                ),
+                x=gx - 15, y=gy - 35,
+                width=gw + 30, height=gh + 50,
+            ))
+            # Label du groupe
+            group_label_id = self._next_id()
+            self._cells.append(MxCell(
+                id=group_label_id,
+                value=f"<b>{sg.label}</b>",
+                style=(
+                    f"text;html=1;fontSize=13;fontStyle=1;fillColor={colors['header']};"
+                    f"fontColor=#ffffff;rounded=1;arcSize=10;"
+                    f"strokeColor=none;spacingLeft=8;spacingRight=8;"
+                ),
+                x=gx - 10, y=gy - 32,
+                width=len(sg.label) * 9 + 30, height=24,
+            ))
+
+        # Créer les noeuds
+        for node_id, node in diagram.nodes.items():
+            if node_id not in positions:
+                continue
+            x, y = positions[node_id]
+
+            # Couleurs selon le groupe
+            group_idx = 0
+            if node.group:
+                group_idx = next(
+                    (i for i, sg in enumerate(diagram.subgraphs) if sg.id == node.group),
+                    0,
+                )
+            colors = MERMAID_GROUP_COLORS[group_idx % len(MERMAID_GROUP_COLORS)]
+
+            # Adapter les couleurs pour les cylindres (DB)
+            if node.shape == "cylinder":
+                style_colors = {"bg": colors["border"], "border": colors["border"]}
+            else:
+                style_colors = {"bg": colors["bg"], "border": colors["border"]}
+
+            shape_style = MERMAID_SHAPE_STYLES.get(node.shape, MERMAID_SHAPE_STYLES["rect"])
+            style = shape_style.format(**style_colors)
+
+            # Taille selon le contenu
+            label_len = len(node.label)
+            width = max(120, min(200, label_len * 8 + 40))
+            height = 50 if node.shape != "diamond" else 60
+            if node.shape == "cylinder":
+                height = 65
+            if node.shape == "circle":
+                width = height = 60
+
+            cell_id = self._register_id(node_id)
+            self._cells.append(MxCell(
+                id=cell_id,
+                value=f"<b>{node.label}</b>",
+                style=style,
+                x=x, y=y,
+                width=width, height=height,
+            ))
+
+        # Créer les connexions (flèches)
+        for edge in diagram.edges:
+            src_id = self._get_id(edge.source)
+            tgt_id = self._get_id(edge.target)
+            if not src_id or not tgt_id:
+                continue
+
+            # Choisir le style de flèche
+            if edge.style == "dotted":
+                edge_style = STYLES["connection_dotted"]
+            elif edge.style == "thick":
+                edge_style = STYLES["connection_thick"]
+            elif is_horizontal:
+                edge_style = STYLES["connection_right"]
+            else:
+                edge_style = STYLES["connection"]
+
+            edge_cell_id = self._next_id()
+            self._cells.append(MxCell(
+                id=edge_cell_id,
+                value=edge.label,
+                style=edge_style,
+                edge=True,
+                source=src_id,
+                target=tgt_id,
+            ))
+
+        return self._to_xml(title or diagram.title or "Diagram")
+
+    def _layout_mermaid(
+        self, diagram, is_horizontal: bool,
+    ) -> dict[str, tuple[float, float]]:
+        """Calcule les positions des noeuds avec un layout automatique.
+
+        Utilise un algorithme topologique simple : place les noeuds couche par couche
+        en fonction de leur distance depuis les noeuds source (sans arêtes entrantes).
+        """
+        # Construire le graphe de dépendances
+        node_ids = list(diagram.nodes.keys())
+        incoming: dict[str, set[str]] = {nid: set() for nid in node_ids}
+        outgoing: dict[str, set[str]] = {nid: set() for nid in node_ids}
+
+        for edge in diagram.edges:
+            if edge.source in incoming and edge.target in incoming:
+                incoming[edge.target].add(edge.source)
+                outgoing[edge.source].add(edge.target)
+
+        # Assigner des couches par BFS topologique
+        layers: dict[str, int] = {}
+        # Sources = noeuds sans arêtes entrantes
+        queue = [nid for nid in node_ids if not incoming[nid]]
+        if not queue:
+            queue = node_ids[:1]  # fallback
+
+        for nid in queue:
+            layers[nid] = 0
+
+        visited = set(queue)
+        bfs = list(queue)
+        while bfs:
+            current = bfs.pop(0)
+            for neighbor in outgoing.get(current, []):
+                new_layer = layers[current] + 1
+                if neighbor not in layers or new_layer > layers[neighbor]:
+                    layers[neighbor] = new_layer
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    bfs.append(neighbor)
+
+        # Noeuds sans couche (déconnectés)
+        max_layer = max(layers.values()) if layers else 0
+        for nid in node_ids:
+            if nid not in layers:
+                max_layer += 1
+                layers[nid] = max_layer
+
+        # Regrouper les noeuds par couche
+        layer_groups: dict[int, list[str]] = {}
+        for nid, layer in layers.items():
+            if layer not in layer_groups:
+                layer_groups[layer] = []
+            layer_groups[layer].append(nid)
+
+        # Calculer les positions
+        positions: dict[str, tuple[float, float]] = {}
+        spacing_x = 200
+        spacing_y = 120
+        start_x = 40
+        start_y = 40
+
+        for layer_num in sorted(layer_groups.keys()):
+            nodes_in_layer = layer_groups[layer_num]
+            for idx, nid in enumerate(nodes_in_layer):
+                if is_horizontal:
+                    x = start_x + layer_num * spacing_x
+                    y = start_y + idx * spacing_y
+                else:
+                    x = start_x + idx * spacing_x
+                    y = start_y + layer_num * spacing_y
+                positions[nid] = (x, y)
+
+        return positions
+
+    def _compute_group_rects(
+        self, diagram, positions: dict[str, tuple[float, float]],
+    ) -> dict[str, tuple[float, float, float, float]]:
+        """Calcule les rectangles englobants des sous-graphes."""
+        rects: dict[str, tuple[float, float, float, float]] = {}
+
+        for sg in diagram.subgraphs:
+            if not sg.nodes:
+                continue
+            node_positions = [positions[nid] for nid in sg.nodes if nid in positions]
+            if not node_positions:
+                continue
+            min_x = min(p[0] for p in node_positions)
+            min_y = min(p[1] for p in node_positions)
+            max_x = max(p[0] for p in node_positions) + 160  # largeur noeud approx
+            max_y = max(p[1] for p in node_positions) + 50   # hauteur noeud approx
+            rects[sg.id] = (min_x, min_y, max_x - min_x, max_y - min_y)
+
+        return rects
 
     def _to_xml(self, title: str = "Diagram") -> str:
         """Génère le XML DrawIO complet."""

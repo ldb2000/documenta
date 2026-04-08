@@ -46,83 +46,96 @@ class PromptBuilder:
         return ctx
 
     def architecture_prompt(self) -> str:
-        """Prompt pour générer la description de l'architecture."""
+        """Prompt pour générer l'architecture en Mermaid."""
         return f"""{self._project_context(include_code=True)}
 
 ---
 
-En te basant sur l'analyse ci-dessus, décris l'architecture technique de ce projet.
+En te basant sur l'analyse ci-dessus, génère un diagramme d'architecture technique de ce projet au format **Mermaid flowchart**.
 
-Fournis ta réponse sous cette structure EXACTE en JSON :
-{{
-  "title": "Architecture de [nom du projet]",
-  "layers": [
-    {{
-      "name": "Nom de la couche (ex: Frontend, Backend, API, Database, Infrastructure)",
-      "components": [
-        {{
-          "name": "Nom du composant",
-          "description": "Description courte",
-          "technology": "Technologie utilisée",
-          "files": ["fichier1.py", "fichier2.py"]
-        }}
-      ]
-    }}
-  ],
-  "connections": [
-    {{
-      "from": "Composant source",
-      "to": "Composant cible",
-      "label": "Type de connexion (HTTP, WebSocket, SQL, etc.)",
-      "direction": "right ou down"
-    }}
-  ],
-  "external_services": [
-    {{
-      "name": "Nom du service externe",
-      "type": "API, Database, CDN, etc."
-    }}
-  ]
-}}
+Règles STRICTES :
+- Utilise `flowchart TD` (top-down)
+- Crée des `subgraph` pour chaque couche (Frontend, Backend, API, Database, Infrastructure, etc.)
+- Chaque composant doit être un noeud avec un ID court et un label descriptif
+- Utilise `[(label)]` pour les bases de données (cylindre)
+- Utilise `([label])` pour les services externes
+- TOUTES les connexions entre composants doivent avoir des flèches `-->` avec des labels `|label|`
+- Utilise `-.->` pour les connexions optionnelles ou asynchrones
+- Utilise `==>` pour les flux de données principaux
+- Sois exhaustif sur les connexions : chaque composant doit avoir au moins une flèche
 
-Réponds UNIQUEMENT avec le JSON, sans texte avant ou après."""
+Exemple de format attendu :
+```mermaid
+flowchart TD
+    subgraph Frontend["Frontend"]
+        UI[React App]
+        Router[React Router]
+    end
+    subgraph Backend["Backend API"]
+        API[FastAPI Server]
+        Auth[Auth Service]
+    end
+    subgraph Data["Base de données"]
+        DB[(PostgreSQL)]
+        Cache[(Redis)]
+    end
+
+    UI -->|HTTP REST| API
+    UI --> Router
+    API -->|SQL| DB
+    API -->|Cache| Cache
+    API --> Auth
+    Auth -.->|JWT| UI
+```
+
+Réponds UNIQUEMENT avec le bloc ```mermaid, sans texte avant ou après."""
 
     def functional_prompt(self) -> str:
-        """Prompt pour générer le schéma fonctionnel."""
+        """Prompt pour générer le schéma fonctionnel en Mermaid."""
         return f"""{self._project_context(include_code=True)}
 
 ---
 
-En te basant sur l'analyse ci-dessus, décris le fonctionnement de cette application du point de vue utilisateur/métier.
+En te basant sur l'analyse ci-dessus, génère un diagramme fonctionnel / métier de cette application au format **Mermaid flowchart**.
 
-Fournis ta réponse sous cette structure EXACTE en JSON :
-{{
-  "title": "Schéma fonctionnel de [nom du projet]",
-  "actors": [
-    {{
-      "name": "Nom de l'acteur (Utilisateur, Admin, Système, etc.)",
-      "description": "Description du rôle"
-    }}
-  ],
-  "features": [
-    {{
-      "name": "Nom de la fonctionnalité",
-      "description": "Description",
-      "actor": "Acteur principal",
-      "steps": ["Étape 1", "Étape 2", "Étape 3"]
-    }}
-  ],
-  "flows": [
-    {{
-      "name": "Nom du flux",
-      "steps": [
-        {{"actor": "Acteur", "action": "Action réalisée", "target": "Cible de l'action"}}
-      ]
-    }}
-  ]
-}}
+Règles STRICTES :
+- Utilise `flowchart LR` (left-to-right)
+- Les acteurs (Utilisateur, Admin, Système) sont des noeuds ronds `((Acteur))`
+- Les fonctionnalités sont des rectangles `[Fonctionnalité]`
+- Les décisions/conditions sont des losanges `{{Condition}}`
+- Les bases de données sont des cylindres `[(Base)]`
+- Crée des `subgraph` pour regrouper les fonctionnalités par domaine
+- TOUTES les interactions doivent avoir des flèches avec labels descriptifs
+- Montre les flux utilisateur principaux de bout en bout
+- Utilise `-->` pour les actions, `-.->` pour les réponses/retours
 
-Réponds UNIQUEMENT avec le JSON, sans texte avant ou après."""
+Exemple de format attendu :
+```mermaid
+flowchart LR
+    User((Utilisateur))
+
+    subgraph Auth["Authentification"]
+        Login[Page de connexion]
+        Register[Inscription]
+    end
+    subgraph App["Application"]
+        Dashboard[Tableau de bord]
+        Profile[Mon profil]
+    end
+    subgraph Data["Données"]
+        DB[(Base de données)]
+    end
+
+    User -->|Se connecter| Login
+    User -->|S'inscrire| Register
+    Login -->|Succès| Dashboard
+    Register -->|Créer compte| DB
+    Dashboard -->|Consulter| Profile
+    Profile -->|Sauvegarder| DB
+    DB -.->|Données| Dashboard
+```
+
+Réponds UNIQUEMENT avec le bloc ```mermaid, sans texte avant ou après."""
 
     def development_docs_prompt(self) -> str:
         """Prompt pour la documentation de développement détaillée."""
