@@ -32,7 +32,7 @@ def generate(
         help="Répertoire de sortie pour la documentation",
     ),
     code_model: str = typer.Option(
-        "deepseek-coder-v2:16b", "--code-model",
+        "mlx-community/gemma-4-26b-a4b-it-8bit", "--code-model",
         help="Modèle LLM pour l'analyse de code",
     ),
     code_backend: str = typer.Option(
@@ -44,7 +44,7 @@ def generate(
         help="URL de l'API pour le modèle code (override du backend)",
     ),
     doc_model: str = typer.Option(
-        "mistral:7b", "--doc-model",
+        "mlx-community/gemma-4-26b-a4b-it-8bit", "--doc-model",
         help="Modèle LLM pour la rédaction",
     ),
     doc_backend: str = typer.Option(
@@ -56,7 +56,7 @@ def generate(
         help="URL de l'API pour le modèle doc (override du backend)",
     ),
     diagram_model: str = typer.Option(
-        "llama3.1:8b", "--diagram-model",
+        "mlx-community/gemma-4-26b-a4b-it-8bit", "--diagram-model",
         help="Modèle LLM pour les diagrammes",
     ),
     diagram_backend: str = typer.Option(

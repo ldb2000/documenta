@@ -30,15 +30,15 @@ class DocumentaConfig(BaseSettings):
     default_backend: Backend = "ollama"
 
     # Modèles et leurs backends
-    code_model: str = "deepseek-coder-v2:16b"
+    code_model: str = "mlx-community/gemma-4-26b-a4b-it-8bit"
     code_backend: Backend | None = None
     code_url: str | None = None
 
-    doc_model: str = "mistral:7b"
+    doc_model: str = "mlx-community/gemma-4-26b-a4b-it-8bit"
     doc_backend: Backend | None = None
     doc_url: str | None = None
 
-    diagram_model: str = "llama3.1:8b"
+    diagram_model: str = "mlx-community/gemma-4-26b-a4b-it-8bit"
     diagram_backend: Backend | None = None
     diagram_url: str | None = None
 
