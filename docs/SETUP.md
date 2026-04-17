@@ -9,7 +9,7 @@
 
 ### Logiciels requis
 - **Python** 3.11 ou supérieur
-- **Ollama** (runtime LLM local)
+- **Ollama** (runtime LLM local) — OU **LM Studio** pour les modèles MLX
 - **draw.io** (optionnel, pour l'export PNG des diagrammes)
 - **Git** (optionnel, pour l'analyse des infos de versioning)
 
@@ -59,6 +59,29 @@ ollama pull llama3.1:8b
 > ollama pull qwen2.5-coder:14b    # Alternative code, très performant
 > ollama pull mixtral:8x7b          # Alternative docs, excellent en français
 > ```
+
+### 3bis. (Optionnel) LM Studio pour les modèles MLX
+
+Sur Apple Silicon (M1 → M5), les modèles **MLX** sont significativement plus rapides que leurs équivalents GGUF via Ollama. Documenta peut les utiliser via **LM Studio** qui expose une API OpenAI-compatible.
+
+```bash
+# 1. Installer LM Studio
+# Télécharger depuis : https://lmstudio.ai
+# Ou via Homebrew :
+brew install --cask lm-studio
+
+# 2. Dans LM Studio :
+#    - Onglet "Search" : télécharger les modèles MLX voulus, ex :
+#        mlx-community/gemma-4-26b-a4b-it-8bit
+#        mlx-community/Qwen2.5-Coder-14B-Instruct-8bit
+#    - Onglet "Developer" : charger un modèle et lancer le serveur local
+#    - Le serveur écoute par défaut sur http://localhost:1234/v1
+
+# 3. Vérifier que le serveur répond
+curl http://localhost:1234/v1/models
+```
+
+Une fois LM Studio en marche, Documenta détecte automatiquement les modèles MLX (ceux avec un `/` dans le nom) et les route vers LM Studio au lieu d'Ollama.
 
 ### 4. Installer Documenta
 
@@ -112,6 +135,7 @@ export DOCUMENTA_LANGUAGE="fr"
 Les options CLI sont prioritaires sur les variables d'environnement :
 
 ```bash
+# Tout Ollama
 documenta generate /mon/projet \
   --code-model qwen2.5-coder:14b \
   --doc-model mixtral:8x7b \
@@ -119,7 +143,35 @@ documenta generate /mon/projet \
   --output documentation \
   --lang fr \
   --no-png
+
+# Backends mixtes : Ollama pour code/diagrammes, LM Studio (MLX) pour la doc
+documenta generate /mon/projet \
+  --code-model deepseek-coder-v2:16b \
+  --code-backend ollama \
+  --doc-model mlx-community/gemma-4-26b-a4b-it-8bit \
+  --doc-backend lmstudio \
+  --diagram-model llama3.1:8b \
+  --diagram-backend ollama
+
+# URL personnalisée (port custom, machine distante)
+documenta generate /mon/projet \
+  --doc-model gemma-4 \
+  --doc-backend openai \
+  --doc-url http://192.168.1.10:1234/v1
 ```
+
+### Backends disponibles
+
+Documenta supporte plusieurs backends LLM :
+
+| Backend | URL par défaut | Description |
+|---------|----------------|-------------|
+| `ollama` | `http://localhost:11434` | Ollama (format GGUF) |
+| `lmstudio` | `http://localhost:1234/v1` | LM Studio (idéal pour MLX) |
+| `mlx` | `http://localhost:8080/v1` | mlx-lm server direct |
+| `openai` | `http://localhost:1234/v1` | Tout endpoint OpenAI-compatible (vLLM, jan.ai, etc.) |
+
+**Auto-détection** : les modèles dont le nom contient un `/` (ex: `mlx-community/gemma-4-26b-a4b-it-8bit`) utilisent automatiquement le backend `lmstudio`.
 
 ## Démarrage
 

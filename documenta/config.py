@@ -1,17 +1,21 @@
 """Configuration de Documenta."""
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+Backend = Literal["ollama", "openai", "lmstudio", "mlx"]
 
-class LLMModelConfig(BaseSettings):
-    """Configuration d'un modèle LLM."""
 
-    name: str = "mistral"
-    temperature: float = 0.3
-    context_length: int = 8192
+# URLs par défaut selon le backend
+DEFAULT_BACKEND_URLS: dict[str, str] = {
+    "ollama": "http://localhost:11434",
+    "lmstudio": "http://localhost:1234/v1",
+    "mlx": "http://localhost:8080/v1",
+    "openai": "http://localhost:1234/v1",
+}
 
 
 class DocumentaConfig(BaseSettings):
@@ -19,15 +23,24 @@ class DocumentaConfig(BaseSettings):
 
     model_config = {"env_prefix": "DOCUMENTA_"}
 
-    # Ollama
+    # URL de base par défaut (Ollama)
     ollama_base_url: str = "http://localhost:11434"
 
-    # Modèle pour l'analyse de code et l'architecture
+    # Backend par défaut (pour les modèles sans backend explicite)
+    default_backend: Backend = "ollama"
+
+    # Modèles et leurs backends
     code_model: str = "deepseek-coder-v2:16b"
-    # Modèle pour la rédaction de documentation
+    code_backend: Backend | None = None
+    code_url: str | None = None
+
     doc_model: str = "mistral:7b"
-    # Modèle pour les diagrammes et la synthèse
+    doc_backend: Backend | None = None
+    doc_url: str | None = None
+
     diagram_model: str = "llama3.1:8b"
+    diagram_backend: Backend | None = None
+    diagram_url: str | None = None
 
     # Températures par usage
     code_temperature: float = 0.1
@@ -58,3 +71,20 @@ class DocumentaConfig(BaseSettings):
 
     def get_output_path(self, project_path: Path) -> Path:
         return project_path / self.output_dir
+
+    def resolve_backend(self, model_name: str, explicit: Backend | None = None) -> Backend:
+        """Détermine le backend pour un modèle donné."""
+        if explicit:
+            return explicit
+        # Auto-détection : les modèles avec un / sont typiquement MLX/HF
+        if "/" in model_name or model_name.startswith("mlx-"):
+            return "lmstudio"
+        return self.default_backend
+
+    def resolve_url(self, backend: Backend, explicit: str | None = None) -> str:
+        """Détermine l'URL pour un backend donné."""
+        if explicit:
+            return explicit
+        if backend == "ollama":
+            return self.ollama_base_url
+        return DEFAULT_BACKEND_URLS.get(backend, self.ollama_base_url)

@@ -15,7 +15,7 @@ from documenta.config import DocumentaConfig
 from documenta.drawio.builder import DrawioBuilder, parse_llm_json
 from documenta.drawio.exporter import DrawioExporter
 from documenta.drawio.mermaid_parser import parse_mermaid
-from documenta.llm.client import OllamaClient
+from documenta.llm.client import LLMClient
 from documenta.llm.prompts import PromptBuilder
 from documenta.utils.files import safe_write
 
@@ -32,7 +32,7 @@ class DocumentationEngine:
     ):
         self.project = project
         self.config = config or DocumentaConfig()
-        self.llm = OllamaClient(self.config)
+        self.llm = LLMClient(self.config)
         self.prompts = PromptBuilder(project)
         self.drawio = DrawioBuilder()
         self.exporter = DrawioExporter()
@@ -54,16 +54,7 @@ class DocumentationEngine:
             border_style="cyan",
         ))
 
-        # Vérifier la connexion Ollama
-        if not await self.llm.check_connection():
-            console.print(
-                "[red]✗ Impossible de se connecter à Ollama.[/red]\n"
-                "  Lancez Ollama : ollama serve\n"
-                "  Ou installez-le : https://ollama.com"
-            )
-            return generated
-
-        # Vérifier les modèles disponibles
+        # Vérifier la connexion et les modèles disponibles
         await self._check_models()
 
         with Progress(
@@ -153,24 +144,53 @@ class DocumentationEngine:
         return generated
 
     async def _check_models(self) -> None:
-        """Vérifie que les modèles requis sont disponibles."""
-        models_needed = {
-            self.config.code_model: "analyse de code",
-            self.config.doc_model: "documentation",
-            self.config.diagram_model: "diagrammes",
-        }
+        """Vérifie que les modèles requis sont disponibles sur leur backend."""
+        models_config = [
+            ("analyse de code", self.config.code_model,
+             self.config.code_backend, self.config.code_url),
+            ("documentation", self.config.doc_model,
+             self.config.doc_backend, self.config.doc_url),
+            ("diagrammes", self.config.diagram_model,
+             self.config.diagram_backend, self.config.diagram_url),
+        ]
 
-        available = await self.llm.list_models()
-        available_base = {m.split(":")[0] for m in available}
+        for usage, model, backend_opt, url_opt in models_config:
+            backend = self.config.resolve_backend(model, backend_opt)
+            url = self.config.resolve_url(backend, url_opt)
 
-        for model, usage in models_needed.items():
-            model_base = model.split(":")[0]
-            if model_base not in available_base and model not in available:
+            # Vérifier la connexion au backend
+            backend_ok = await self.llm._check_url(url, backend)
+            if not backend_ok:
                 console.print(
-                    f"[yellow]⚠ Modèle '{model}' ({usage}) non trouvé localement.[/yellow]"
+                    f"[red]✗ Backend {backend} ({url}) non accessible "
+                    f"pour le modèle {usage}.[/red]"
                 )
-                console.print(f"  → Téléchargement automatique via : ollama pull {model}")
-                await self.llm.pull_model(model)
+                continue
+
+            # Vérifier la disponibilité du modèle
+            available = await self.llm.list_models(url=url, backend=backend)
+            model_base = model.split(":")[0].split("/")[-1]
+            found = (
+                model in available
+                or any(m.startswith(model_base) or model in m for m in available)
+            )
+
+            if not found:
+                console.print(
+                    f"[yellow]⚠ Modèle '{model}' ({usage}) non trouvé sur "
+                    f"{backend} @ {url}.[/yellow]"
+                )
+                if backend == "ollama":
+                    console.print(f"  → Téléchargement via : ollama pull {model}")
+                    await self.llm.pull_model(model)
+                else:
+                    console.print(
+                        f"  → Téléchargez-le via LM Studio ou votre runtime MLX."
+                    )
+            else:
+                console.print(
+                    f"[dim]✓ {usage} : {model} disponible sur {backend}[/dim]"
+                )
 
     async def _generate_architecture(self) -> Path | None:
         """Génère le diagramme d'architecture via Mermaid + analyse statique."""

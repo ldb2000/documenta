@@ -125,38 +125,59 @@ Les Phases 1 et 2 sont **lancées séquentiellement** mais les appels au sein de
 
 ## Démarrage rapide
 
-### 1. Installer Ollama
+Documenta supporte **2 types de backends** pour faire tourner les LLMs localement :
+
+- **Ollama** (par défaut) — simple et unifié
+- **LM Studio / mlx-lm** — pour utiliser les modèles MLX optimisés Apple Silicon
+
+Tu peux mixer les deux selon les modèles.
+
+### Option A : Tout via Ollama
 
 ```bash
-# macOS (Homebrew)
-brew install ollama
+# 1. Installer Ollama
+brew install ollama                                     # macOS
+curl -fsSL https://ollama.com/install.sh | sh           # Linux
 
-# Linux
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-### 2. Télécharger les 3 modèles
-
-```bash
+# 2. Télécharger les modèles
 ollama pull deepseek-coder-v2:16b   # ~9 Go - Analyse de code
 ollama pull mistral:7b               # ~4 Go - Rédaction documentation
 ollama pull llama3.1:8b              # ~5 Go - Génération de diagrammes
-```
 
-### 3. Installer Documenta
+# 3. Installer Documenta
+cd documenta && pip install -e .
 
-```bash
-cd documenta
-pip install -e .
-```
-
-### 4. Générer la documentation d'un projet
-
-```bash
+# 4. Générer la documentation
 documenta generate /chemin/vers/mon-projet
 ```
 
-### 5. (Optionnel) Installer draw.io pour l'export PNG
+### Option B : Mixer Ollama + LM Studio (pour modèles MLX)
+
+Les modèles MLX (format Apple Silicon) sont plus rapides et moins gourmands en RAM sur M1/M2/M3/M4/M5 que les modèles GGUF d'Ollama. À combiner avec LM Studio ou mlx-lm.
+
+```bash
+# 1. Installer LM Studio : https://lmstudio.ai
+#    Lance le serveur local (port 1234 par défaut) depuis l'onglet "Developer"
+
+# 2. Dans LM Studio, télécharger :
+#    - mlx-community/gemma-4-26b-a4b-it-8bit (pour la doc)
+#    - (optionnel) d'autres modèles MLX
+
+# 3. Ollama pour le reste
+ollama pull deepseek-coder-v2:16b
+ollama pull llama3.1:8b
+
+# 4. Lancer Documenta avec backends mixtes
+documenta generate /chemin/vers/mon-projet \
+  --code-model deepseek-coder-v2:16b \
+  --code-backend ollama \
+  --doc-model mlx-community/gemma-4-26b-a4b-it-8bit \
+  --doc-backend lmstudio \
+  --diagram-model llama3.1:8b \
+  --diagram-backend ollama
+```
+
+### (Optionnel) Installer draw.io pour l'export PNG
 
 ```bash
 brew install --cask drawio   # macOS
@@ -176,16 +197,27 @@ documenta generate /chemin/vers/mon-projet
 # Spécifier un répertoire de sortie
 documenta generate /chemin/vers/mon-projet -o documentation
 
-# Changer les modèles utilisés
+# Changer les modèles utilisés (Ollama)
 documenta generate /chemin/vers/mon-projet \
   --code-model qwen2.5-coder:14b \
   --doc-model mixtral:8x7b \
   --diagram-model llama3.1:8b
 
+# Utiliser un modèle MLX via LM Studio pour la doc
+documenta generate /chemin/vers/mon-projet \
+  --doc-model mlx-community/gemma-4-26b-a4b-it-8bit \
+  --doc-backend lmstudio
+
+# URL personnalisée pour un modèle (port custom, machine distante, etc.)
+documenta generate /chemin/vers/mon-projet \
+  --doc-model gemma-4 \
+  --doc-backend openai \
+  --doc-url http://192.168.1.10:1234/v1
+
 # Désactiver l'export PNG
 documenta generate /chemin/vers/mon-projet --no-png
 
-# Vérifier l'environnement (Ollama, modèles, draw.io)
+# Vérifier l'environnement (tous les backends, modèles, draw.io)
 documenta check
 
 # Voir les modèles recommandés et leur statut
@@ -194,6 +226,17 @@ documenta models
 # Afficher la version
 documenta version
 ```
+
+### Options de backend disponibles
+
+| Backend | URL par défaut | Usage |
+|---------|----------------|-------|
+| `ollama` | `http://localhost:11434` | Ollama (par défaut) |
+| `lmstudio` | `http://localhost:1234/v1` | LM Studio (idéal pour MLX) |
+| `mlx` | `http://localhost:8080/v1` | mlx-lm serveur direct |
+| `openai` | `http://localhost:1234/v1` | Tout endpoint OpenAI-compatible |
+
+Le backend est auto-détecté : les modèles dont le nom contient un `/` (ex: `mlx-community/...`) utilisent `lmstudio` par défaut.
 
 ### Exemple de sortie
 
@@ -290,21 +333,31 @@ DOCUMENTA_LANGUAGE=fr
 
 ## Modèles recommandés
 
-### Configuration par défaut (~18 Go RAM)
+### Configuration par défaut Ollama (~18 Go RAM)
 
-| Modèle | Usage | RAM | Vitesse | Qualité |
-|--------|-------|-----|---------|---------|
-| `deepseek-coder-v2:16b` | Analyse de code | ~9 Go | Moyenne | Excellente |
-| `mistral:7b` | Rédaction docs | ~4 Go | Rapide | Très bonne |
-| `llama3.1:8b` | Diagrammes | ~5 Go | Rapide | Bonne |
+| Modèle | Usage | Backend | RAM | Note |
+|--------|-------|---------|-----|------|
+| `deepseek-coder-v2:16b` | Analyse de code | ollama | ~9 Go | Excellente compréhension du code |
+| `mistral:7b` | Rédaction docs | ollama | ~4 Go | Bon français, rapide |
+| `llama3.1:8b` | Diagrammes | ollama | ~5 Go | Bon raisonnement structuré |
 
-### Alternatives possibles
+### Modèles MLX (optimisés Apple Silicon, via LM Studio)
+
+Sur M1/M2/M3/M4/M5, les modèles MLX sont **significativement plus rapides** que leurs équivalents GGUF.
+
+| Modèle | Usage | Backend | RAM | Note |
+|--------|-------|---------|-----|------|
+| `mlx-community/gemma-4-26b-a4b-it-8bit` | Rédaction docs | lmstudio | ~26 Go | Excellent français, optimisé M-series |
+| `mlx-community/Qwen2.5-Coder-14B-Instruct-8bit` | Analyse code | lmstudio | ~15 Go | Top code, rapide sur M-series |
+| `mlx-community/Llama-3.1-8B-Instruct-8bit` | Diagrammes | lmstudio | ~9 Go | Bon raisonnement, rapide |
+
+### Alternatives Ollama
 
 | Modèle | Usage | RAM | Note |
 |--------|-------|-----|------|
 | `qwen2.5-coder:14b` | Alternative code | ~8 Go | Très bon en code (Alibaba) |
 | `codellama:13b` | Alternative code | ~7 Go | Spécialisé code (Meta) |
-| `mixtral:8x7b` | Alternative docs | ~26 Go | Excellent en français, gourmand en RAM |
+| `mixtral:8x7b` | Alternative docs | ~26 Go | Excellent en français, gourmand |
 | `gemma2:9b` | Polyvalent | ~5 Go | Bon compromis (Google) |
 | `llama3.1:70b` | Qualité maximale | ~40 Go | Le meilleur, mais lent |
 
@@ -328,10 +381,20 @@ documenta generate /projet \
 
 **64 Go RAM** (configuration maximale - MacBook Pro M5) :
 ```bash
+# Tout Ollama
 documenta generate /projet \
   --code-model qwen2.5-coder:14b \
   --doc-model mixtral:8x7b \
   --diagram-model llama3.1:8b
+
+# Mixte Ollama + MLX (LM Studio) — recommandé sur Apple Silicon
+documenta generate /projet \
+  --code-model deepseek-coder-v2:16b \
+  --code-backend ollama \
+  --doc-model mlx-community/gemma-4-26b-a4b-it-8bit \
+  --doc-backend lmstudio \
+  --diagram-model llama3.1:8b \
+  --diagram-backend ollama
 ```
 
 ---
